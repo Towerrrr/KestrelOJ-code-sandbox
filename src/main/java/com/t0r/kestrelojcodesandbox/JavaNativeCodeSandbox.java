@@ -4,6 +4,8 @@ import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.io.resource.ResourceUtil;
 import com.t0r.kestrelojcodesandbox.model.ExecuteCodeRequest;
 import com.t0r.kestrelojcodesandbox.model.ExecuteCodeResponse;
+import com.t0r.kestrelojcodesandbox.model.ExecuteMessage;
+import com.t0r.kestrelojcodesandbox.utils.ProcessUtils;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -45,7 +47,6 @@ public class JavaNativeCodeSandbox implements CodeSandbox {
         if (!FileUtil.exist(globalCodePathName)) {
             FileUtil.mkdir(globalCodePathName);
         }
-
         // 把用户代码隔离存放
         String userCodeParentPath = globalCodePathName + File.separator + UUID.randomUUID();
         String userCodePathName = userCodeParentPath + File.separator + GLOBAL_JAVA_CLASS_NAME;
@@ -55,41 +56,22 @@ public class JavaNativeCodeSandbox implements CodeSandbox {
         String compileCmd = String.format("javac -encoding UTF-8 %s", userCodeFile.getAbsolutePath());
         try {
             Process compileProcess = Runtime.getRuntime().exec(compileCmd);
-            // 等待编译完成，获取返回值
-            int exitCode = compileProcess.waitFor();
-            if (exitCode == 0) {
-                System.out.println("编译成功");
-                // 分批获取进程的正常输出
-                BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(compileProcess.getInputStream()));
-                StringBuilder compileOutputStringBuilder = new StringBuilder();
-                // 逐行读取输出
-                String compileOutputLine;
-                while ((compileOutputLine = bufferedReader.readLine()) != null) {
-                    compileOutputStringBuilder.append(compileOutputLine);
-                }
-                System.out.println(compileOutputStringBuilder);
-            } else {
-                System.out.println("编译失败，退出码：" + exitCode);
-                // 分批获取进程的正常输出
-                BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(compileProcess.getInputStream()));
-                StringBuilder compileOutputStringBuilder = new StringBuilder();
-                // 逐行读取输出
-                String compileOutputLine;
-                while ((compileOutputLine = bufferedReader.readLine()) != null) {
-                    compileOutputStringBuilder.append(compileOutputLine);
-                }
-                // 分批获取进程的错误输出
-                BufferedReader errorBufferedReader = new BufferedReader(new InputStreamReader(compileProcess.getErrorStream()));
-                StringBuilder errorCompileOutput = new StringBuilder();
-                // 逐行读取输出
-                String errorCompileOutputLine;
-                while ((errorCompileOutputLine = errorBufferedReader.readLine()) != null) {
-                    errorCompileOutput.append(errorCompileOutputLine);
-                }
-                System.out.println(compileOutputStringBuilder);
+            ExecuteMessage executeMessage = ProcessUtils.runProcessAndGetMessage(compileProcess, "编译");
+            System.out.println(executeMessage);
+        } catch (IOException ex) {
+            throw new RuntimeException(ex);
+        }
+
+        // 3. 执行用户代码，获取输出
+        for (String inputArgs : inputList) {
+            String runCmd = String.format("java -Dfile.encoding=UTF-8 -cp %s Main %s", userCodeParentPath, inputArgs);
+            try {
+                Process runProcess = Runtime.getRuntime().exec(runCmd);
+                ExecuteMessage executeMessage = ProcessUtils.runProcessAndGetMessage(runProcess, "运行");
+                System.out.println(executeMessage);
+            } catch (IOException e) {
+                throw new RuntimeException(e);
             }
-        } catch (IOException | InterruptedException e) {
-            throw new RuntimeException(e);
         }
 
         return null;
