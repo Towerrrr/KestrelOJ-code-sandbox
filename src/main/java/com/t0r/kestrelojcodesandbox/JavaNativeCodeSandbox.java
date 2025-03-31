@@ -61,8 +61,8 @@ public class JavaNativeCodeSandbox implements CodeSandbox {
             Process compileProcess = Runtime.getRuntime().exec(compileCmd);
             ExecuteMessage executeMessage = ProcessUtils.runProcessAndGetMessage(compileProcess, "编译");
             System.out.println(executeMessage);
-        } catch (IOException ex) {
-            throw new RuntimeException(ex);
+        } catch (IOException e) {
+            return getErrorResponse(e);
         }
 
         // 3. 执行用户代码，获取输出
@@ -75,7 +75,7 @@ public class JavaNativeCodeSandbox implements CodeSandbox {
                 System.out.println(executeMessage);
                 executeMessageList.add(executeMessage);
             } catch (IOException e) {
-                throw new RuntimeException(e);
+                return getErrorResponse(e);
             }
         }
 
@@ -88,7 +88,7 @@ public class JavaNativeCodeSandbox implements CodeSandbox {
             String errorMessage = executeMessage.getErrorMessage();
             if (StrUtil.isNotBlank(errorMessage)) {
                 executeCodeResponse.setMessage(errorMessage);
-                // 执行中存在错误
+                // 用户提交的代码执行中存在错误
                 // todo 枚举
                 executeCodeResponse.setStatus(3);
                 break;
@@ -112,8 +112,27 @@ public class JavaNativeCodeSandbox implements CodeSandbox {
         judgeInfo.setTime(maxTime);
         executeCodeResponse.setJudgeInfo(judgeInfo);
 
+        // 5. 删除用户代码
+        if (userCodeFile.getParentFile().exists()) {
+            boolean del = FileUtil.del(userCodeParentPath);
+            System.out.println("删除" + (del ? "成功" : "失败"));
+        }
+        return executeCodeResponse;
+    }
 
-
-        return null;
+    /**
+     * 获取错误响应
+     * @param e
+     * @return
+     */
+    private ExecuteCodeResponse getErrorResponse(Throwable e) {
+        ExecuteCodeResponse executeCodeResponse = new ExecuteCodeResponse();
+        executeCodeResponse.setOutputList(new ArrayList<>());
+        executeCodeResponse.setMessage(e.getMessage());
+        // 表示代码沙箱错误
+        // todo 枚举
+        executeCodeResponse.setStatus(2);
+        executeCodeResponse.setJudgeInfo(new JudgeInfo());
+        return executeCodeResponse;
     }
 }
