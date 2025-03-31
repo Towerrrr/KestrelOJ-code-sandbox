@@ -2,9 +2,11 @@ package com.t0r.kestrelojcodesandbox;
 
 import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.io.resource.ResourceUtil;
+import cn.hutool.core.util.StrUtil;
 import com.t0r.kestrelojcodesandbox.model.ExecuteCodeRequest;
 import com.t0r.kestrelojcodesandbox.model.ExecuteCodeResponse;
 import com.t0r.kestrelojcodesandbox.model.ExecuteMessage;
+import com.t0r.kestrelojcodesandbox.model.JudgeInfo;
 import com.t0r.kestrelojcodesandbox.utils.ProcessUtils;
 
 import java.io.BufferedReader;
@@ -12,6 +14,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
@@ -63,16 +66,53 @@ public class JavaNativeCodeSandbox implements CodeSandbox {
         }
 
         // 3. 执行用户代码，获取输出
+        List<ExecuteMessage> executeMessageList = new ArrayList<>();
         for (String inputArgs : inputList) {
             String runCmd = String.format("java -Dfile.encoding=UTF-8 -cp %s Main %s", userCodeParentPath, inputArgs);
             try {
                 Process runProcess = Runtime.getRuntime().exec(runCmd);
                 ExecuteMessage executeMessage = ProcessUtils.runProcessAndGetMessage(runProcess, "运行");
                 System.out.println(executeMessage);
+                executeMessageList.add(executeMessage);
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
         }
+
+        // 4. 处理用户代码的输出
+        ExecuteCodeResponse executeCodeResponse = new ExecuteCodeResponse();
+        List<String> outputList = new ArrayList<>();
+        // 取最大值，便于判断是否超时
+        long maxTime = 0;
+        for (ExecuteMessage executeMessage : executeMessageList) {
+            String errorMessage = executeMessage.getErrorMessage();
+            if (StrUtil.isNotBlank(errorMessage)) {
+                executeCodeResponse.setMessage(errorMessage);
+                // 执行中存在错误
+                // todo 枚举
+                executeCodeResponse.setStatus(3);
+                break;
+            }
+            outputList.add(executeMessage.getMessage());
+            Long time = executeMessage.getTime();
+            if (time != null) {
+                maxTime = Math.max(maxTime, time);
+            }
+        }
+        // 正常运行完成
+        if (outputList.size() == executeMessageList.size()) {
+            // todo 枚举
+            executeCodeResponse.setStatus(1);
+        }
+        executeCodeResponse.setOutputList(outputList);
+
+        JudgeInfo judgeInfo = new JudgeInfo();
+        // todo 要借助第三方库，暂时不做
+//        judgeInfo.setMemory();
+        judgeInfo.setTime(maxTime);
+        executeCodeResponse.setJudgeInfo(judgeInfo);
+
+
 
         return null;
     }

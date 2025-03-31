@@ -1,6 +1,7 @@
 package com.t0r.kestrelojcodesandbox.utils;
 
 import com.t0r.kestrelojcodesandbox.model.ExecuteMessage;
+import org.springframework.util.StopWatch;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -21,6 +22,8 @@ public class ProcessUtils {
         ExecuteMessage executeMessage = new ExecuteMessage();
         
         try {
+            StopWatch stopWatch = new StopWatch();
+            stopWatch.start();
             // 等待编译完成，获取返回值
             int exitCode = runProcess.waitFor();
             executeMessage.setExitCode(exitCode);
@@ -56,10 +59,14 @@ public class ProcessUtils {
                 }
                 executeMessage.setErrorMessage(errorCompileOutput.toString());
             }
+            stopWatch.stop();
+            executeMessage.setTime(stopWatch.getLastTaskTimeMillis());
         } catch (InterruptedException | IOException e) {
             e.printStackTrace();
             throw new RuntimeException(e);
         }
         return executeMessage;
     }
+
+    // todo 执行交互式进程并获取信息
 }
