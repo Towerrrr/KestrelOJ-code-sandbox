@@ -3,16 +3,16 @@ package com.t0r.kestrelojcodesandbox;
 import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.io.resource.ResourceUtil;
 import cn.hutool.core.util.StrUtil;
+import cn.hutool.dfa.FoundWord;
+import cn.hutool.dfa.WordTree;
 import com.t0r.kestrelojcodesandbox.model.ExecuteCodeRequest;
 import com.t0r.kestrelojcodesandbox.model.ExecuteCodeResponse;
 import com.t0r.kestrelojcodesandbox.model.ExecuteMessage;
 import com.t0r.kestrelojcodesandbox.model.JudgeInfo;
 import com.t0r.kestrelojcodesandbox.utils.ProcessUtils;
 
-import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -24,6 +24,17 @@ public class JavaNativeCodeSandbox implements CodeSandbox {
     private static final String GLOBAL_CODE_DIR_NAME = "tmpCode";
 
     private static final String GLOBAL_JAVA_CLASS_NAME = "Main.java";
+
+    private static final long TIME_OUT = 5000L;
+
+    private static final List<String> backList = Arrays.asList("Files", "exec");
+
+    private static final WordTree WORD_TREE = new WordTree();
+
+    static {
+        // 初始化字典树
+        WORD_TREE.addWords(backList);
+    }
 
     public static void main(String[] args) {
         JavaNativeCodeSandbox javaNativeCodeSandbox = new JavaNativeCodeSandbox();
@@ -42,6 +53,14 @@ public class JavaNativeCodeSandbox implements CodeSandbox {
         List<String> inputList = executeCodeRequest.getInputList();
         String code = executeCodeRequest.getCode();
         String language = executeCodeRequest.getLanguage();
+
+        // 校验代码中是否含有黑名单命令
+        FoundWord foundWord = WORD_TREE.matchWord(code);
+        if (foundWord != null) {
+            System.out.println("禁止使用: " + foundWord.getFoundWord());
+            return getErrorResponse(new RuntimeException("禁止使用" + foundWord.getFoundWord()));
+        }
+
 
         // 1. 把用户的代码存放到全局目录
         String userDir = System.getProperty("user.dir");
@@ -68,9 +87,22 @@ public class JavaNativeCodeSandbox implements CodeSandbox {
         // 3. 执行用户代码，获取输出
         List<ExecuteMessage> executeMessageList = new ArrayList<>();
         for (String inputArgs : inputList) {
-            String runCmd = String.format("java -Dfile.encoding=UTF-8 -cp %s Main %s", userCodeParentPath, inputArgs);
+            //-Xmx256m 来限制内存使用，防止内存溢出
+            String runCmd = String.format("java -Xmx256m -Dfile.encoding=UTF-8 -cp %s Main %s", userCodeParentPath, inputArgs);
+
             try {
                 Process runProcess = Runtime.getRuntime().exec(runCmd);
+                // 超时处理
+                new Thread(() -> {
+                    try {
+                        Thread.sleep(TIME_OUT);
+                        System.out.println("执行超时，强制中止");
+                        // todo 要先判断进程是否还在运行，否则会抛出异常
+                        runProcess.destroy();
+                    } catch (InterruptedException e) {
+                        throw new RuntimeException(e);
+                    }
+                }).start();
                 ExecuteMessage executeMessage = ProcessUtils.runProcessAndGetMessage(runProcess, "运行");
                 System.out.println(executeMessage);
                 executeMessageList.add(executeMessage);
