@@ -9,6 +9,7 @@ import com.t0r.kestrelojcodesandbox.model.ExecuteCodeRequest;
 import com.t0r.kestrelojcodesandbox.model.ExecuteCodeResponse;
 import com.t0r.kestrelojcodesandbox.model.ExecuteMessage;
 import com.t0r.kestrelojcodesandbox.model.JudgeInfo;
+import com.t0r.kestrelojcodesandbox.security.DefaultSecurityManager;
 import com.t0r.kestrelojcodesandbox.utils.ProcessUtils;
 
 import java.io.File;
@@ -26,6 +27,10 @@ public class JavaNativeCodeSandbox implements CodeSandbox {
     private static final String GLOBAL_JAVA_CLASS_NAME = "Main.java";
 
     private static final long TIME_OUT = 5000L;
+
+    private static final String SECURITY_MANAGER_PATH = "E:\\MyProjects\\KestrelOJ\\kestreloj-code-sandbox\\src\\main\\resources\\security";
+
+    private static final String SECURITY_MANAGER_CLASS_NAME = "DefaultSecurityManager";
 
     private static final List<String> backList = Arrays.asList("Files", "exec");
 
@@ -50,6 +55,7 @@ public class JavaNativeCodeSandbox implements CodeSandbox {
 
     @Override
     public ExecuteCodeResponse executeCode(ExecuteCodeRequest executeCodeRequest) {
+
         List<String> inputList = executeCodeRequest.getInputList();
         String code = executeCodeRequest.getCode();
         String language = executeCodeRequest.getLanguage();
@@ -60,7 +66,6 @@ public class JavaNativeCodeSandbox implements CodeSandbox {
             System.out.println("禁止使用: " + foundWord.getFoundWord());
             return getErrorResponse(new RuntimeException("禁止使用" + foundWord.getFoundWord()));
         }
-
 
         // 1. 把用户的代码存放到全局目录
         String userDir = System.getProperty("user.dir");
@@ -88,7 +93,11 @@ public class JavaNativeCodeSandbox implements CodeSandbox {
         List<ExecuteMessage> executeMessageList = new ArrayList<>();
         for (String inputArgs : inputList) {
             //-Xmx256m 来限制内存使用，防止内存溢出
-            String runCmd = String.format("java -Xmx256m -Dfile.encoding=UTF-8 -cp %s Main %s", userCodeParentPath, inputArgs);
+            String runCmd = String.format("java -Xmx256m \"-Dfile.encoding=UTF-8\" -cp \"%s;%s\" \"-Djava.security.manager=%s\" Main %s",
+                    userCodeParentPath, SECURITY_MANAGER_PATH, SECURITY_MANAGER_CLASS_NAME, inputArgs);
+            System.out.println(runCmd);
+            // java -Xmx256m "-Dfile.encoding=UTF-8" -cp %s;%s "-Djava.security.manager=%s" Main 3 4
+            // java -Xmx256m "-Dfile.encoding=UTF-8" -cp E:\MyProjects\KestrelOJ\kestreloj-code-sandbox\tmpCode\aec88875-a24a-4ac0-a0d0-aea48ba12a19;E:\MyProjects\KestrelOJ\kestreloj-code-sandbox\src\main\resources\security "-Djava.security.manager=DefaultSecurityManager" Main 1 2
 
             try {
                 Process runProcess = Runtime.getRuntime().exec(runCmd);
@@ -144,11 +153,11 @@ public class JavaNativeCodeSandbox implements CodeSandbox {
         judgeInfo.setTime(maxTime);
         executeCodeResponse.setJudgeInfo(judgeInfo);
 
-        // 5. 删除用户代码
-        if (userCodeFile.getParentFile().exists()) {
-            boolean del = FileUtil.del(userCodeParentPath);
-            System.out.println("删除" + (del ? "成功" : "失败"));
-        }
+//        // 5. 删除用户代码
+//        if (userCodeFile.getParentFile().exists()) {
+//            boolean del = FileUtil.del(userCodeParentPath);
+//            System.out.println("删除" + (del ? "成功" : "失败"));
+//        }
         return executeCodeResponse;
     }
 
