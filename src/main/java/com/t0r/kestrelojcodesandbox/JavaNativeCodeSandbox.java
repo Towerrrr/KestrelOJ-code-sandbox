@@ -9,7 +9,6 @@ import com.t0r.kestrelojcodesandbox.model.ExecuteCodeRequest;
 import com.t0r.kestrelojcodesandbox.model.ExecuteCodeResponse;
 import com.t0r.kestrelojcodesandbox.model.ExecuteMessage;
 import com.t0r.kestrelojcodesandbox.model.JudgeInfo;
-import com.t0r.kestrelojcodesandbox.security.DefaultSecurityManager;
 import com.t0r.kestrelojcodesandbox.utils.ProcessUtils;
 
 import java.io.File;
@@ -153,11 +152,11 @@ public class JavaNativeCodeSandbox implements CodeSandbox {
         judgeInfo.setTime(maxTime);
         executeCodeResponse.setJudgeInfo(judgeInfo);
 
-//        // 5. 删除用户代码
-//        if (userCodeFile.getParentFile().exists()) {
-//            boolean del = FileUtil.del(userCodeParentPath);
-//            System.out.println("删除" + (del ? "成功" : "失败"));
-//        }
+        // 5. 删除用户代码
+        if (userCodeFile.getParentFile().exists()) {
+            boolean del = FileUtil.del(userCodeParentPath);
+            System.out.println("删除" + (del ? "成功" : "失败"));
+        }
         return executeCodeResponse;
     }
 
