@@ -27,6 +27,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 public class JavaDockerCodeSandbox implements CodeSandbox {
 
@@ -112,10 +113,15 @@ public class JavaDockerCodeSandbox implements CodeSandbox {
         CreateContainerCmd containerCmd = dockerClient.createContainerCmd(image);
         HostConfig hostConfig = new HostConfig();
         hostConfig.withMemory(1024 * 1024 * 1024L);
+        hostConfig.withMemorySwap(0L);
         hostConfig.withCpuCount(1L);
+        // todo 安全管理配置
+        hostConfig.withSecurityOpts(Arrays.asList("seccomp=安全管理配置json" ));
         hostConfig.setBinds(new Bind(userCodeParentPath, new Volume("/code")));
         CreateContainerResponse createContainerResponse = containerCmd
                 .withHostConfig(hostConfig)
+                .withNetworkDisabled(true)
+                .withReadonlyRootfs(true)
                 .withAttachStdin(true)
                 .withAttachStdout(true)
                 .withAttachStderr(true)
@@ -148,6 +154,7 @@ public class JavaDockerCodeSandbox implements CodeSandbox {
             final String[] errorMessage = {null};
             String execId = execCreateCmdResponse.getId();
             long time = 0L;
+            final boolean[] isTimeout = {true};
             ResultCallback.Adapter<Frame> callback = new ResultCallback.Adapter<Frame>() {
                 @Override
                 public void onNext(Frame frame) {
@@ -163,6 +170,8 @@ public class JavaDockerCodeSandbox implements CodeSandbox {
 
                 @Override
                 public void onComplete() {
+                    // 超时判断
+                    isTimeout[0] = false;
                     System.out.println("执行完成");
                     super.onComplete();
                 }
@@ -214,7 +223,7 @@ public class JavaDockerCodeSandbox implements CodeSandbox {
                 stopWatch.start();
                 dockerClient.execStartCmd(execId)
                         .exec(callback)
-                        .awaitCompletion();
+                        .awaitCompletion(TIME_OUT, TimeUnit.MILLISECONDS);
                 stopWatch.stop();
                 time = stopWatch.getLastTaskTimeMillis();
                 statsCmd.close();
