@@ -17,7 +17,9 @@ import com.t0r.kestrelojcodesandbox.model.ExecuteCodeResponse;
 import com.t0r.kestrelojcodesandbox.model.ExecuteMessage;
 import com.t0r.kestrelojcodesandbox.model.JudgeInfo;
 import com.t0r.kestrelojcodesandbox.utils.ProcessUtils;
+import org.springframework.util.StopWatch;
 
+import java.io.Closeable;
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -128,7 +130,9 @@ public class JavaDockerCodeSandbox implements CodeSandbox {
 
         // 执行命令并获取结果
         // docker exec sharp_burnell java -cp /code  Main 1 4
+        List<ExecuteMessage> executeMessageList = new ArrayList<>();
         for(String inputArgs : inputList) {
+            StopWatch stopWatch = new StopWatch();
             String[] inputArgArray = inputArgs.split(" ");
             String[] cmdArray = ArrayUtil.append(new String[]{"java", "-cp", "/code", "Main"}, inputArgArray);
             ExecCreateCmdResponse execCreateCmdResponse = dockerClient.execCreateCmd(createContainerResponseId)
@@ -139,15 +143,20 @@ public class JavaDockerCodeSandbox implements CodeSandbox {
                     .exec();
             System.out.println("创建执行命令：" + execCreateCmdResponse);
 
-            // todo 获取返回值
+            ExecuteMessage executeMessage = new ExecuteMessage();
+            final String[] message = {null};
+            final String[] errorMessage = {null};
             String execId = execCreateCmdResponse.getId();
+            long time = 0L;
             ResultCallback.Adapter<Frame> callback = new ResultCallback.Adapter<Frame>() {
                 @Override
                 public void onNext(Frame frame) {
                     if (frame.getStreamType() == StreamType.STDERR) {
-                        System.err.println("错误输出：" + new String(frame.getPayload()));
+                        errorMessage[0] = new String(frame.getPayload());
+                        System.err.println("错误输出：" + errorMessage[0]);
                     } else {
-                        System.out.println("输出结果：" + new String(frame.getPayload()));
+                        message[0] = new String(frame.getPayload());
+                        System.out.println("输出结果：" + message[0]);
                     }
                     super.onNext(frame);
                 }
@@ -164,27 +173,66 @@ public class JavaDockerCodeSandbox implements CodeSandbox {
                     super.onError(throwable);
                 }
             };
+
+            // 获取占用内存
+            // todo 太快了应该是，优化成都能获取到内存
+            final long[] maxMemory = {0L};
+            StatsCmd statsCmd = dockerClient.statsCmd(createContainerResponseId);
+            ResultCallback<Statistics> resultCallback = new ResultCallback<Statistics>() {
+
+                @Override
+                public void onNext(Statistics statistics) {
+                    long memory = statistics.getMemoryStats().getUsage();
+                    System.out.println("内存占用：" + memory);
+                    maxMemory[0] = Math.max(maxMemory[0], memory);
+                }
+
+                @Override
+                public void close() throws IOException {
+
+                }
+
+                @Override
+                public void onStart(Closeable closeable) {
+
+                }
+
+                @Override
+                public void onError(Throwable throwable) {
+
+                }
+
+                @Override
+                public void onComplete() {
+
+                }
+
+            };
+            statsCmd.exec(resultCallback);
+
             try {
+                stopWatch.start();
                 dockerClient.execStartCmd(execId)
                         .exec(callback)
                         .awaitCompletion();
+                stopWatch.stop();
+                time = stopWatch.getLastTaskTimeMillis();
+                statsCmd.close();
             } catch (InterruptedException e) {
                 System.out.println("执行异常：" + e.getMessage());
                 throw new RuntimeException(e);
             }
-
-
+            executeMessage.setMessage(message[0]);
+            executeMessage.setErrorMessage(errorMessage[0]);
+            executeMessage.setTime(time);
+            executeMessage.setMemory(maxMemory[0]);
+            executeMessageList.add(executeMessage);
         }
-
-
-        // 3. 执行用户代码，获取输出
-
-
+        // todo 模板方法，或者javanative那边复制过来
         // 4. 处理用户代码的输出
 
 
         // 5. 删除用户代码
-
         ExecuteCodeResponse executeCodeResponse = new ExecuteCodeResponse();
         return executeCodeResponse;
     }
