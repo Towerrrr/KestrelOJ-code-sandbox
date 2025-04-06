@@ -29,17 +29,9 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
-public class JavaDockerCodeSandbox implements CodeSandbox {
-
-    private static final String GLOBAL_CODE_DIR_NAME = "tmpCode";
-
-    private static final String GLOBAL_JAVA_CLASS_NAME = "Main.java";
+public class JavaDockerCodeSandbox extends JavaCodeSandboxTemplate {
 
     private static final long TIME_OUT = 5000L;
-
-    private static final String SECURITY_MANAGER_PATH = "E:\\MyProjects\\KestrelOJ\\kestreloj-code-sandbox\\src\\main\\resources\\security";
-
-    private static final String SECURITY_MANAGER_CLASS_NAME = "DefaultSecurityManager";
 
     private static final Boolean FIRST_INIT = false;
 
@@ -55,36 +47,16 @@ public class JavaDockerCodeSandbox implements CodeSandbox {
         System.out.println(executeCodeResponse);
     }
 
+    /**
+     * 3. 创建容器，把文件复制到容器内
+     * @param userCodeFile
+     * @param inputList
+     * @return
+     */
     @Override
-    public ExecuteCodeResponse executeCode(ExecuteCodeRequest executeCodeRequest) {
+    public List<ExecuteMessage> runFile(File userCodeFile, List<String> inputList) {
+        String userCodeParentPath = userCodeFile.getParentFile().getAbsolutePath();
 
-        List<String> inputList = executeCodeRequest.getInputList();
-        String code = executeCodeRequest.getCode();
-        String language = executeCodeRequest.getLanguage();
-
-        // 1. 把用户的代码存放到全局目录
-        String userDir = System.getProperty("user.dir");
-        String globalCodePathName = userDir + File.separator + GLOBAL_CODE_DIR_NAME;
-        // 判断全局代码目录是否存在，不存在则创建
-        if (!FileUtil.exist(globalCodePathName)) {
-            FileUtil.mkdir(globalCodePathName);
-        }
-        // 把用户代码隔离存放
-        String userCodeParentPath = globalCodePathName + File.separator + UUID.randomUUID();
-        String userCodePathName = userCodeParentPath + File.separator + GLOBAL_JAVA_CLASS_NAME;
-        File userCodeFile = FileUtil.writeString(code, userCodePathName, StandardCharsets.UTF_8);
-
-        // 2. 编译用户代码
-        String compileCmd = String.format("javac -encoding UTF-8 %s", userCodeFile.getAbsolutePath());
-        try {
-            Process compileProcess = Runtime.getRuntime().exec(compileCmd);
-            ExecuteMessage executeMessage = ProcessUtils.runProcessAndGetMessage(compileProcess, "编译");
-            System.out.println(executeMessage);
-        } catch (IOException e) {
-            return getErrorResponse(e);
-        }
-
-        // 3. 创建容器，把文件复制到容器内
         // 创建Docker客户端
         DockerClient dockerClient = DockerClientBuilder.getInstance().build();
 
@@ -92,7 +64,7 @@ public class JavaDockerCodeSandbox implements CodeSandbox {
         String image = "openjdk:8-alpine";
         if (FIRST_INIT) {
             PullImageCmd pullImageCmd = dockerClient.pullImageCmd(image);
-            PullImageResultCallback pullImageResultCallback = new PullImageResultCallback(){
+            PullImageResultCallback pullImageResultCallback = new PullImageResultCallback() {
                 @Override
                 public void onNext(PullResponseItem item) {
                     System.out.println("下载镜像：" + item.getStatus());
@@ -116,7 +88,7 @@ public class JavaDockerCodeSandbox implements CodeSandbox {
         hostConfig.withMemorySwap(0L);
         hostConfig.withCpuCount(1L);
         // todo 安全管理配置
-        hostConfig.withSecurityOpts(Arrays.asList("seccomp=安全管理配置json" ));
+        hostConfig.withSecurityOpts(Arrays.asList("seccomp=安全管理配置json"));
         hostConfig.setBinds(new Bind(userCodeParentPath, new Volume("/code")));
         CreateContainerResponse createContainerResponse = containerCmd
                 .withHostConfig(hostConfig)
@@ -137,7 +109,7 @@ public class JavaDockerCodeSandbox implements CodeSandbox {
         // 执行命令并获取结果
         // docker exec sharp_burnell java -cp /code  Main 1 4
         List<ExecuteMessage> executeMessageList = new ArrayList<>();
-        for(String inputArgs : inputList) {
+        for (String inputArgs : inputList) {
             StopWatch stopWatch = new StopWatch();
             String[] inputArgArray = inputArgs.split(" ");
             String[] cmdArray = ArrayUtil.append(new String[]{"java", "-cp", "/code", "Main"}, inputArgArray);
@@ -237,28 +209,6 @@ public class JavaDockerCodeSandbox implements CodeSandbox {
             executeMessage.setMemory(maxMemory[0]);
             executeMessageList.add(executeMessage);
         }
-        // todo 模板方法，或者javanative那边复制过来
-        // 4. 处理用户代码的输出
-
-
-        // 5. 删除用户代码
-        ExecuteCodeResponse executeCodeResponse = new ExecuteCodeResponse();
-        return executeCodeResponse;
-    }
-
-    /**
-     * 获取错误响应
-     * @param e
-     * @return
-     */
-    private ExecuteCodeResponse getErrorResponse(Throwable e) {
-        ExecuteCodeResponse executeCodeResponse = new ExecuteCodeResponse();
-        executeCodeResponse.setOutputList(new ArrayList<>());
-        executeCodeResponse.setMessage(e.getMessage());
-        // 表示代码沙箱错误
-        // todo 枚举
-        executeCodeResponse.setStatus(2);
-        executeCodeResponse.setJudgeInfo(new JudgeInfo());
-        return executeCodeResponse;
+        return executeMessageList;
     }
 }
