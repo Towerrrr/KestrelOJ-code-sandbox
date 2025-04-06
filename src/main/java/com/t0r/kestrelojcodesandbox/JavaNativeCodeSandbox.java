@@ -3,6 +3,7 @@ package com.t0r.kestrelojcodesandbox;
 import cn.hutool.core.io.resource.ResourceUtil;
 import com.t0r.kestrelojcodesandbox.model.ExecuteCodeRequest;
 import com.t0r.kestrelojcodesandbox.model.ExecuteCodeResponse;
+import org.springframework.stereotype.Component;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
@@ -10,6 +11,7 @@ import java.util.Arrays;
 /**
  * Java 原生代码沙箱
  */
+@Component
 public class JavaNativeCodeSandbox extends JavaCodeSandboxTemplate {
     @Override
     public ExecuteCodeResponse executeCode(ExecuteCodeRequest executeCodeRequest) {
