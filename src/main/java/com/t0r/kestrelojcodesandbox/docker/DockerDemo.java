@@ -66,6 +66,7 @@ public class DockerDemo {
         dockerClient.removeContainerCmd(createContainerResponseId).withForce(true).exec();
 
         // 删除镜像
-//        dockerClient.removeImageCmd(image).exec();
+        // todo 注意
+        dockerClient.removeImageCmd(image).exec();
     }
 }
