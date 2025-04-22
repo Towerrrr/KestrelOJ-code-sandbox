@@ -2,6 +2,8 @@ package com.t0r.kestrelojcodesandbox;
 
 import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.util.StrUtil;
+import cn.hutool.dfa.FoundWord;
+import cn.hutool.dfa.WordTree;
 import com.t0r.kestrelojcodesandbox.model.ExecuteCodeRequest;
 import com.t0r.kestrelojcodesandbox.model.ExecuteCodeResponse;
 import com.t0r.kestrelojcodesandbox.model.ExecuteMessage;
@@ -13,6 +15,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 
@@ -28,12 +31,34 @@ public abstract class JavaCodeSandboxTemplate implements CodeSandbox {
 
     private static final long TIME_OUT = 5000L;
 
+    // todo 待重构路径
+    private static final String SECURITY_MANAGER_PATH = "E:\\MyProjects\\KestrelOJ\\kestreloj-code-sandbox\\src\\main\\resources\\security";
+
+    private static final String SECURITY_MANAGER_CLASS_NAME = "DefaultSecurityManager";
+
+    // todo 后面最好再重构一下，把字典树单独抽出来
+    private static final List<String> backList = Arrays.asList("Files", "exec");
+
+    private static final WordTree WORD_TREE = new WordTree();
+
+    static {
+        // 初始化字典树
+        WORD_TREE.addWords(backList);
+    }
+
     @Override
     public ExecuteCodeResponse executeCode(ExecuteCodeRequest executeCodeRequest) {
 
         List<String> inputList = executeCodeRequest.getInputList();
         String code = executeCodeRequest.getCode();
         String language = executeCodeRequest.getLanguage();
+
+        // 校验代码中是否含有黑名单命令
+        FoundWord foundWord = WORD_TREE.matchWord(code);
+        if (foundWord != null) {
+            System.out.println("禁止使用: " + foundWord.getFoundWord());
+            return getErrorResponse(new RuntimeException("禁止使用" + foundWord.getFoundWord()));
+        }
 
         // 1. 把用户的代码存放到全局目录
         File userCodeFile = savaCodeToFile(code);
@@ -55,6 +80,22 @@ public abstract class JavaCodeSandboxTemplate implements CodeSandbox {
         }
 
         return executeCodeResponse;
+    }
+
+    /**
+     * 校验代码中是否含有黑名单命令
+     *
+     * @param code
+     * @return
+     */
+    // todo 待重构
+    public ExecuteCodeResponse containsBlacklistedWord(String code) {
+        FoundWord foundWord = WORD_TREE.matchWord(code);
+        if (foundWord != null) {
+            System.out.println("禁止使用: " + foundWord.getFoundWord());
+            return getErrorResponse(new RuntimeException("禁止使用" + foundWord.getFoundWord()));
+        }
+        return null;
     }
 
     /**
@@ -113,6 +154,8 @@ public abstract class JavaCodeSandboxTemplate implements CodeSandbox {
             //-Xmx256m 来限制内存使用，防止内存溢出
             String runCmd = String.format("java -Xmx256m \"-Dfile.encoding=UTF-8\" -cp \"%s\" Main %s",
                     userCodeParentPath, inputArgs);
+//            String runCmd = String.format("java -Xmx256m \"-Dfile.encoding=UTF-8\" -cp \"%s;%s\" \"-Djava.security.manager=%s\" Main %s",
+//                    userCodeParentPath, SECURITY_MANAGER_PATH, SECURITY_MANAGER_CLASS_NAME, inputArgs);
 //            System.out.println(runCmd);
             // java -Xmx256m "-Dfile.encoding=UTF-8" -cp %s;%s "-Djava.security.manager=%s" Main 3 4
             // java -Xmx256m "-Dfile.encoding=UTF-8" -cp E:\MyProjects\KestrelOJ\kestreloj-code-sandbox\tmpCode\aec88875-a24a-4ac0-a0d0-aea48ba12a19;E:\MyProjects\KestrelOJ\kestreloj-code-sandbox\src\main\resources\security "-Djava.security.manager=DefaultSecurityManager" Main 1 2
