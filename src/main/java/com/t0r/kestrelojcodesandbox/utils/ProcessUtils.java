@@ -17,6 +17,19 @@ import java.util.List;
 @Slf4j
 public class ProcessUtils {
 
+    public static void main(String[] args) {
+        String runProcess = "java -version"; // 要执行的命令
+        String opName = "run"; // 操作名
+
+        try {
+            Process process = Runtime.getRuntime().exec(runProcess);
+            ExecuteMessage result = runProcessAndGetMessage(process, opName);
+            log.info("执行结果: {}", result);
+        } catch (Exception e) {
+            log.error("执行过程中出现错误: ", e);
+        }
+    }
+
     /**
      * 执行进程并获取信息
      *
@@ -38,6 +51,8 @@ public class ProcessUtils {
                 System.out.println(opName + "成功");
                 // 分批获取进程的正常输出
                 gatherOutput(runProcess, executeMessage, false);
+                // 分批获取进程的错误输出
+                gatherOutput(runProcess, executeMessage, true);
             } else {
                 System.out.println(opName + "失败，退出码：" + exitCode);
                 // 分批获取进程的正常输出
@@ -69,6 +84,7 @@ public class ProcessUtils {
         String outputLine;
         while ((outputLine = bufferedReader.readLine()) != null) {
             outputStrList.add(outputLine);
+            System.out.println(outputLine);
         }
         if (isError) {
             executeMessage.setErrorMessage(StringUtils.join(outputStrList, "\n"));

@@ -17,4 +17,6 @@ public class ExecuteMessage {
     private Long time;
 
     private Long memory;
+
+    // todo 重写 toString() 方法
 }

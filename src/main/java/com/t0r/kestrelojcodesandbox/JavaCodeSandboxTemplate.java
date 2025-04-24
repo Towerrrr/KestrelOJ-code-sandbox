@@ -63,23 +63,26 @@ public abstract class JavaCodeSandboxTemplate implements CodeSandbox {
         // 1. 把用户的代码存放到全局目录
         File userCodeFile = savaCodeToFile(code);
 
-        // 2. 编译用户代码
-        ExecuteMessage compileFileExecuteMessage = compileFile(userCodeFile);
-        System.out.println(compileFileExecuteMessage);
+        try {
+            // 2. 编译用户代码
+            compileFile(userCodeFile);
 
-        // 3. 执行用户代码，获取输出
-        List<ExecuteMessage> executeMessageList = runFile(userCodeFile, inputList);
+            // 3. 执行用户代码，获取输出
+            List<ExecuteMessage> executeMessageList = runFile(userCodeFile, inputList);
 
-        // 4. 处理用户代码的输出
-        ExecuteCodeResponse executeCodeResponse = getOutputResponse(executeMessageList);
+            // 4. 处理用户代码的输出
+            ExecuteCodeResponse executeCodeResponse = getOutputResponse(executeMessageList);
 
-        // 5. 删除用户代码
-        boolean isDeleteSuccess = deleteFile(userCodeFile);
-        if (!isDeleteSuccess) {
-            log.error("delete file error, userCodeFile: {}", userCodeFile.getAbsolutePath());
+            // 5. 删除用户代码
+            boolean isDeleteSuccess = deleteFile(userCodeFile);
+            if (!isDeleteSuccess) {
+                log.error("delete file error, userCodeFile: {}", userCodeFile.getAbsolutePath());
+            }
+
+            return executeCodeResponse;
+        } catch (IOException e) {
+            return getErrorResponse(e);
         }
-
-        return executeCodeResponse;
     }
 
     /**
@@ -112,10 +115,9 @@ public abstract class JavaCodeSandboxTemplate implements CodeSandbox {
             FileUtil.mkdir(globalCodePathName);
         }
         // 把用户代码隔离存放
-        String userCodeParentPath = globalCodePathName + File.separator + UUID.randomUUID();
-        String userCodePathName = userCodeParentPath + File.separator + GLOBAL_JAVA_CLASS_NAME;
-        File userCodeFile = FileUtil.writeString(code, userCodePathName, StandardCharsets.UTF_8);
-        return userCodeFile;
+        String userCodeParentPath = globalCodePathName + File.separator + UUID.randomUUID(); // 用户代码文件夹
+        String userCodePathName = userCodeParentPath + File.separator + GLOBAL_JAVA_CLASS_NAME; // 用户代码文件
+        return FileUtil.writeString(code, userCodePathName, StandardCharsets.UTF_8);
     }
 
     /**
@@ -124,19 +126,15 @@ public abstract class JavaCodeSandboxTemplate implements CodeSandbox {
      * @param userCodeFile
      * @return
      */
-    public ExecuteMessage compileFile(File userCodeFile) {
+    public void compileFile(File userCodeFile) throws IOException {
+        // todo 包装这个字符串
         String compileCmd = String.format("javac -encoding UTF-8 %s", userCodeFile.getAbsolutePath());
-        try {
-            Process compileProcess = Runtime.getRuntime().exec(compileCmd);
-            ExecuteMessage executeMessage = ProcessUtils.runProcessAndGetMessage(compileProcess, "编译");
-            if (executeMessage.getExitCode() != 0) {
-                throw new RuntimeException("编译失败");
-            }
-            return executeMessage;
-        } catch (IOException e) {
-//            return getErrorResponse(e);
-            throw new RuntimeException(e);
+        Process compileProcess = Runtime.getRuntime().exec(compileCmd);
+        ExecuteMessage executeMessage = ProcessUtils.runProcessAndGetMessage(compileProcess, "编译");
+        if (executeMessage.getExitCode() != 0) {
+            throw new RuntimeException("编译失败");
         }
+        System.out.println(executeMessage);
     }
 
     /**
@@ -146,11 +144,12 @@ public abstract class JavaCodeSandboxTemplate implements CodeSandbox {
      * @param inputList
      * @return
      */
-    public List<ExecuteMessage> runFile(File userCodeFile, List<String> inputList) {
+    public List<ExecuteMessage> runFile(File userCodeFile, List<String> inputList) throws IOException {
         String userCodeParentPath = userCodeFile.getParentFile().getAbsolutePath();
 
         List<ExecuteMessage> executeMessageList = new ArrayList<>();
         for (String inputArgs : inputList) {
+            // todo 包装字符串
             //-Xmx256m 来限制内存使用，防止内存溢出
             String runCmd = String.format("java -Xmx256m \"-Dfile.encoding=UTF-8\" -cp \"%s\" Main %s",
                     userCodeParentPath, inputArgs);
@@ -160,25 +159,21 @@ public abstract class JavaCodeSandboxTemplate implements CodeSandbox {
             // java -Xmx256m "-Dfile.encoding=UTF-8" -cp %s;%s "-Djava.security.manager=%s" Main 3 4
             // java -Xmx256m "-Dfile.encoding=UTF-8" -cp E:\MyProjects\KestrelOJ\kestreloj-code-sandbox\tmpCode\aec88875-a24a-4ac0-a0d0-aea48ba12a19;E:\MyProjects\KestrelOJ\kestreloj-code-sandbox\src\main\resources\security "-Djava.security.manager=DefaultSecurityManager" Main 1 2
 
-            try {
-                Process runProcess = Runtime.getRuntime().exec(runCmd);
-                // 超时处理
-                new Thread(() -> {
-                    try {
-                        Thread.sleep(TIME_OUT);
-                        System.out.println("执行超时，强制中止");
-                        // todo 要先判断进程是否还在运行，否则会抛出异常
-                        runProcess.destroy();
-                    } catch (InterruptedException e) {
-                        throw new RuntimeException(e);
-                    }
-                }).start();
-                ExecuteMessage executeMessage = ProcessUtils.runProcessAndGetMessage(runProcess, "运行");
-                System.out.println(executeMessage);
-                executeMessageList.add(executeMessage);
-            } catch (IOException e) {
-                throw new RuntimeException("执行失败", e);
-            }
+            Process runProcess = Runtime.getRuntime().exec(runCmd);
+            // 超时处理
+            new Thread(() -> {
+                try {
+                    Thread.sleep(TIME_OUT);
+                    System.out.println("执行超时，强制中止");
+                    // todo 要先判断进程是否还在运行，否则会抛出异常
+                    runProcess.destroy();
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
+            }).start();
+            ExecuteMessage executeMessage = ProcessUtils.runProcessAndGetMessage(runProcess, "运行");
+            System.out.println(executeMessage);
+            executeMessageList.add(executeMessage);
         }
         return executeMessageList;
     }
@@ -234,7 +229,7 @@ public abstract class JavaCodeSandboxTemplate implements CodeSandbox {
         if (userCodeFile.getParentFile().exists()) {
             String userCodeParentPath = userCodeFile.getParentFile().getAbsolutePath();
             boolean del = FileUtil.del(userCodeParentPath);
-            System.out.println("删除" + (del ? "成功" : "失败"));
+            log.info("删除用户代码{}", del ? "成功" : "失败");
             return del;
         }
         return true;
