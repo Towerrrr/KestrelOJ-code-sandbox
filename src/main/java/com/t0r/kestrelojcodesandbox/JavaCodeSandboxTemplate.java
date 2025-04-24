@@ -4,6 +4,7 @@ import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.dfa.FoundWord;
 import cn.hutool.dfa.WordTree;
+import com.t0r.kestrelojcodesandbox.enums.ExecuteStateEnum;
 import com.t0r.kestrelojcodesandbox.model.ExecuteCodeRequest;
 import com.t0r.kestrelojcodesandbox.model.ExecuteCodeResponse;
 import com.t0r.kestrelojcodesandbox.model.ExecuteMessage;
@@ -194,8 +195,7 @@ public abstract class JavaCodeSandboxTemplate implements CodeSandbox {
             if (StrUtil.isNotBlank(errorMessage)) {
                 executeCodeResponse.setMessage(errorMessage);
                 // 用户提交的代码执行中存在错误
-                // todo 枚举
-                executeCodeResponse.setStatus(3);
+                executeCodeResponse.setStatus(ExecuteStateEnum.FAILED.getValue());
                 break;
             }
             outputList.add(executeMessage.getMessage());
@@ -206,8 +206,7 @@ public abstract class JavaCodeSandboxTemplate implements CodeSandbox {
         }
         // 正常运行完成
         if (outputList.size() == executeMessageList.size()) {
-            // todo 枚举
-            executeCodeResponse.setStatus(1);
+            executeCodeResponse.setStatus(ExecuteStateEnum.SUCCESS.getValue());
         }
         executeCodeResponse.setOutputList(outputList);
 
@@ -241,14 +240,12 @@ public abstract class JavaCodeSandboxTemplate implements CodeSandbox {
      * @param e
      * @return
      */
-    // todo  解决用法
     private ExecuteCodeResponse getErrorResponse(Throwable e) {
         ExecuteCodeResponse executeCodeResponse = new ExecuteCodeResponse();
         executeCodeResponse.setOutputList(new ArrayList<>());
         executeCodeResponse.setMessage(e.getMessage());
         // 表示代码沙箱错误
-        // todo 枚举
-        executeCodeResponse.setStatus(2);
+        executeCodeResponse.setStatus(ExecuteStateEnum.ERROR.getValue());
         executeCodeResponse.setJudgeInfo(new JudgeInfo());
         return executeCodeResponse;
     }
