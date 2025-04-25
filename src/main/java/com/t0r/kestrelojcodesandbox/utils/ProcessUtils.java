@@ -48,18 +48,14 @@ public class ProcessUtils {
             executeMessage.setExitCode(exitCode);
             // 正常退出
             if (exitCode == 0) {
-                System.out.println(opName + "成功");
-                // 分批获取进程的正常输出
-                gatherOutput(runProcess, executeMessage, false);
-                // 分批获取进程的错误输出
-                gatherOutput(runProcess, executeMessage, true);
+                log.info("{}成功，退出码：{}", opName, exitCode);
             } else {
-                System.out.println(opName + "失败，退出码：" + exitCode);
-                // 分批获取进程的正常输出
-                gatherOutput(runProcess, executeMessage, false);
-                // 分批获取进程的错误输出
-                gatherOutput(runProcess, executeMessage, true);
+                log.error("{}失败，退出码：{}", opName, exitCode);
             }
+            // 分批获取进程的正常输出
+            gatherOutput(runProcess, executeMessage, false);
+            // 分批获取进程的错误输出
+            gatherOutput(runProcess, executeMessage, true);
             stopWatch.stop();
             executeMessage.setTime(stopWatch.getLastTaskTimeMillis());
         } catch (InterruptedException | IOException e) {
@@ -84,7 +80,6 @@ public class ProcessUtils {
         String outputLine;
         while ((outputLine = bufferedReader.readLine()) != null) {
             outputStrList.add(outputLine);
-            System.out.println(outputLine);
         }
         if (isError) {
             executeMessage.setErrorMessage(StringUtils.join(outputStrList, "\n"));

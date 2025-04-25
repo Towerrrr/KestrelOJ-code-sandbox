@@ -18,5 +18,14 @@ public class ExecuteMessage {
 
     private Long memory;
 
-    // todo 重写 toString() 方法
+    @Override
+    public String toString() {
+        return "\nExecuteMessage {" +
+                "\nexitCode=" + exitCode +
+                ", \nmessage='" + message + '\'' +
+                ", \nerrorMessage='" + errorMessage + '\'' +
+                ", \ntime=" + time +
+                ", \nmemory=" + memory +
+                "\n}";
+    }
 }
