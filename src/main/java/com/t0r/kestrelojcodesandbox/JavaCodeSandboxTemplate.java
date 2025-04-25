@@ -135,7 +135,7 @@ public abstract class JavaCodeSandboxTemplate implements CodeSandbox {
         if (executeMessage.getExitCode() != 0) {
             throw new RuntimeException("编译失败");
         }
-        System.out.println(executeMessage);
+        log.info("编译结果：{}", executeMessage);
     }
 
     /**
@@ -165,15 +165,20 @@ public abstract class JavaCodeSandboxTemplate implements CodeSandbox {
             new Thread(() -> {
                 try {
                     Thread.sleep(TIME_OUT);
-                    System.out.println("执行超时，强制中止");
-                    // todo 要先判断进程是否还在运行，否则会抛出异常
-                    runProcess.destroy();
+                    try {
+                        // 没有抛出异常说明进程已经结束
+                        runProcess.exitValue();
+                    } catch (IllegalThreadStateException e) {
+                        // 抛出异常说明进程未结束，需要强制结束
+                        log.info("执行超时，强制结束进程");
+                        runProcess.destroy();
+                    }
                 } catch (InterruptedException e) {
                     throw new RuntimeException(e);
                 }
             }).start();
             ExecuteMessage executeMessage = ProcessUtils.runProcessAndGetMessage(runProcess, "运行");
-            System.out.println(executeMessage);
+            log.info("运行结果：{}", executeMessage);
             executeMessageList.add(executeMessage);
         }
         return executeMessageList;
