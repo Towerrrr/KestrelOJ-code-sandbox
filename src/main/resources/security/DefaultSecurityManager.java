@@ -2,6 +2,8 @@ import java.security.Permission;
 
 /**
  * 默认安全管理器
+ * 编译命令：
+ * javac --release 8 -encoding UTF-8 .\DefaultSecurityManager.java
  */
 public class DefaultSecurityManager extends SecurityManager {
     @Override
@@ -11,10 +13,11 @@ public class DefaultSecurityManager extends SecurityManager {
 
     @Override
     public void checkRead(String file) {
-//        if (file.contains("C:\\Program Files\\Java\\jdk1.8.0_341")) {
+        if (file.contains("C:\\Program Files\\Java\\jdk1.8.0_341") ||
+                file.contains("E:\\MyProjects\\KestrelOJ\\kestreloj-code-sandbox\\tmpCode")) {
             return;
-//        }
-//        throw new SecurityException("checkRead 权限异常：" + file);
+        }
+        throw new SecurityException("checkRead 权限异常：" + file);
     }
 
     @Override
@@ -31,7 +34,6 @@ public class DefaultSecurityManager extends SecurityManager {
     @Override
     public void checkDelete(String file) {
         throw new SecurityException("checkDelete 权限异常：" + file);
-
     }
 
     @Override

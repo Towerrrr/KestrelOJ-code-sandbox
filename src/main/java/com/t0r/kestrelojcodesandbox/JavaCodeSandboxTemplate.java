@@ -30,13 +30,6 @@ public abstract class JavaCodeSandboxTemplate implements CodeSandbox {
 
     private static final String GLOBAL_JAVA_CLASS_NAME = "Main.java";
 
-    private static final long TIME_OUT = 5000L;
-
-    // todo 待重构路径
-    private static final String SECURITY_MANAGER_PATH = "E:\\MyProjects\\KestrelOJ\\kestreloj-code-sandbox\\src\\main\\resources\\security";
-
-    private static final String SECURITY_MANAGER_CLASS_NAME = "DefaultSecurityManager";
-
     // todo 后面最好再重构一下，把字典树单独抽出来
     private static final List<String> backList = Arrays.asList("Files", "exec");
 
@@ -144,45 +137,9 @@ public abstract class JavaCodeSandboxTemplate implements CodeSandbox {
      * @param userCodeFile
      * @param inputList
      * @return
+     * @throws IOException
      */
-    public List<ExecuteMessage> runFile(File userCodeFile, List<String> inputList) throws IOException {
-        String userCodeParentPath = userCodeFile.getParentFile().getAbsolutePath();
-
-        List<ExecuteMessage> executeMessageList = new ArrayList<>();
-        for (String inputArgs : inputList) {
-            // todo 包装字符串
-            //-Xmx256m 来限制内存使用，防止内存溢出
-            String runCmd = String.format("java -Xmx256m \"-Dfile.encoding=UTF-8\" -cp \"%s\" Main %s",
-                    userCodeParentPath, inputArgs);
-//            String runCmd = String.format("java -Xmx256m \"-Dfile.encoding=UTF-8\" -cp \"%s;%s\" \"-Djava.security.manager=%s\" Main %s",
-//                    userCodeParentPath, SECURITY_MANAGER_PATH, SECURITY_MANAGER_CLASS_NAME, inputArgs);
-//            System.out.println(runCmd);
-            // java -Xmx256m "-Dfile.encoding=UTF-8" -cp %s;%s "-Djava.security.manager=%s" Main 3 4
-            // java -Xmx256m "-Dfile.encoding=UTF-8" -cp E:\MyProjects\KestrelOJ\kestreloj-code-sandbox\tmpCode\aec88875-a24a-4ac0-a0d0-aea48ba12a19;E:\MyProjects\KestrelOJ\kestreloj-code-sandbox\src\main\resources\security "-Djava.security.manager=DefaultSecurityManager" Main 1 2
-
-            Process runProcess = Runtime.getRuntime().exec(runCmd);
-            // 超时处理
-            new Thread(() -> {
-                try {
-                    Thread.sleep(TIME_OUT);
-                    try {
-                        // 没有抛出异常说明进程已经结束
-                        runProcess.exitValue();
-                    } catch (IllegalThreadStateException e) {
-                        // 抛出异常说明进程未结束，需要强制结束
-                        log.info("执行超时，强制结束进程");
-                        runProcess.destroy();
-                    }
-                } catch (InterruptedException e) {
-                    throw new RuntimeException(e);
-                }
-            }).start();
-            ExecuteMessage executeMessage = ProcessUtils.runProcessAndGetMessage(runProcess, "运行");
-            log.info("运行结果：{}", executeMessage);
-            executeMessageList.add(executeMessage);
-        }
-        return executeMessageList;
-    }
+    public abstract List<ExecuteMessage> runFile(File userCodeFile, List<String> inputList) throws IOException;
 
     /**
      * 4. 处理用户代码的输出
