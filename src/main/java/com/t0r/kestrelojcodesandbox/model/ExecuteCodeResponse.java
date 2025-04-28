@@ -13,12 +13,15 @@ import java.util.List;
 @AllArgsConstructor
 public class ExecuteCodeResponse {
 
+    /**
+     * 输出列表
+     */
     private List<String> outputList;
 
     /**
-     * 接口信息
+     * 错误信息
      */
-    private String message;
+    private String errorMessage;
 
     /**
      * 执行状态

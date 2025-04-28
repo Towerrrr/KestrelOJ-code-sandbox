@@ -5,6 +5,7 @@ import cn.hutool.core.util.StrUtil;
 import cn.hutool.dfa.FoundWord;
 import cn.hutool.dfa.WordTree;
 import com.t0r.kestrelojcodesandbox.enums.ExecuteStateEnum;
+import com.t0r.kestrelojcodesandbox.enums.JudgeInfoMessageEnum;
 import com.t0r.kestrelojcodesandbox.model.ExecuteCodeRequest;
 import com.t0r.kestrelojcodesandbox.model.ExecuteCodeResponse;
 import com.t0r.kestrelojcodesandbox.model.ExecuteMessage;
@@ -150,13 +151,21 @@ public abstract class JavaCodeSandboxTemplate implements CodeSandbox {
     public ExecuteCodeResponse getOutputResponse(List<ExecuteMessage> executeMessageList) {
         ExecuteCodeResponse executeCodeResponse = new ExecuteCodeResponse();
         List<String> outputList = new ArrayList<>();
+
+        JudgeInfo judgeInfo = new JudgeInfo();
+
         // 取最大值，便于判断是否超时
         long maxTime = 0;
         for (ExecuteMessage executeMessage : executeMessageList) {
             String errorMessage = executeMessage.getErrorMessage();
             if (StrUtil.isNotBlank(errorMessage)) {
-                executeCodeResponse.setMessage(errorMessage);
+                executeCodeResponse.setErrorMessage(errorMessage);
                 // 用户提交的代码执行中存在错误
+                executeCodeResponse.setStatus(ExecuteStateEnum.FAILED.getValue());
+                break;
+            } else if (executeMessage.getJudgeInfoMessageEnum() == JudgeInfoMessageEnum.TIME_EXCEEDED) {
+                judgeInfo.setMessage(JudgeInfoMessageEnum.TIME_EXCEEDED.getValue());
+                // 用户提交代码超时
                 executeCodeResponse.setStatus(ExecuteStateEnum.FAILED.getValue());
                 break;
             }
@@ -172,7 +181,6 @@ public abstract class JavaCodeSandboxTemplate implements CodeSandbox {
         }
         executeCodeResponse.setOutputList(outputList);
 
-        JudgeInfo judgeInfo = new JudgeInfo();
         // todo 要借助第三方库，暂时不做
 //        judgeInfo.setMemory();
         judgeInfo.setTime(maxTime);
@@ -205,7 +213,7 @@ public abstract class JavaCodeSandboxTemplate implements CodeSandbox {
     private ExecuteCodeResponse getErrorResponse(Throwable e) {
         ExecuteCodeResponse executeCodeResponse = new ExecuteCodeResponse();
         executeCodeResponse.setOutputList(new ArrayList<>());
-        executeCodeResponse.setMessage(e.getMessage());
+        executeCodeResponse.setErrorMessage(e.getMessage());
         // 表示代码沙箱错误
         executeCodeResponse.setStatus(ExecuteStateEnum.ERROR.getValue());
         executeCodeResponse.setJudgeInfo(new JudgeInfo());

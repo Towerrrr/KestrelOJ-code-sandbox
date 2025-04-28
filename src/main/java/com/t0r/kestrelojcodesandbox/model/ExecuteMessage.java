@@ -1,5 +1,6 @@
 package com.t0r.kestrelojcodesandbox.model;
 
+import com.t0r.kestrelojcodesandbox.enums.JudgeInfoMessageEnum;
 import lombok.Data;
 
 /**
@@ -9,6 +10,8 @@ import lombok.Data;
 public class ExecuteMessage {
 
     private Integer exitCode;
+
+    private JudgeInfoMessageEnum judgeInfoMessageEnum = JudgeInfoMessageEnum.ACCEPTED;
 
     private String message;
 

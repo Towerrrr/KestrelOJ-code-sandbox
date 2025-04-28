@@ -14,6 +14,7 @@ import com.t0r.kestrelojcodesandbox.model.ExecuteCodeResponse;
 import com.t0r.kestrelojcodesandbox.model.ExecuteMessage;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import com.t0r.kestrelojcodesandbox.enums.JudgeInfoMessageEnum;
 
 import java.io.Closeable;
 import java.io.File;
@@ -76,7 +77,8 @@ public class JavaDockerCodeSandbox extends JavaCodeSandboxTemplate {
         String userDir = System.getProperty("user.dir");
         String seccompConfigPath = "src/main/java/com/t0r/kestrelojcodesandbox/security/seccomp.json";
         String seccompConfigAbsolutePath = userDir + File.separator + seccompConfigPath;
-        hostConfig.withSecurityOpts(Collections.singletonList("seccomp=" + seccompConfigAbsolutePath));
+        // todo 先用默认地址
+//        hostConfig.withSecurityOpts(Collections.singletonList("seccomp=https://raw.githubusercontent.com/moby/moby/master/profiles/seccomp/default.json"));
         hostConfig.setBinds(new Bind(userCodeParentPath, new Volume("/code")));
 
         CreateContainerResponse createContainerResponse = containerCmd
@@ -117,7 +119,8 @@ public class JavaDockerCodeSandbox extends JavaCodeSandboxTemplate {
             final String[] errorMessage = {null};
             String execId = execCreateCmdResponse.getId();
             long time = 0L;
-            ResultCallback.Adapter<Frame> callback = getFrameAdapter(errorMessage, message);
+            final boolean[] isTimeout = {true};
+            ResultCallback.Adapter<Frame> callback = getFrameAdapter(errorMessage, message, isTimeout);
 
             // 获取占用内存
             // todo 太快了应该是，优化成都能获取到内存
@@ -138,6 +141,7 @@ public class JavaDockerCodeSandbox extends JavaCodeSandboxTemplate {
                 log.error("执行异常：{}", e.getMessage());
                 throw new RuntimeException(e);
             }
+            executeMessage.setJudgeInfoMessageEnum(isTimeout[0]? JudgeInfoMessageEnum.TIME_EXCEEDED : JudgeInfoMessageEnum.ACCEPTED);
             executeMessage.setMessage(message[0]);
             executeMessage.setErrorMessage(errorMessage[0]);
             executeMessage.setTime(time);
@@ -154,8 +158,7 @@ public class JavaDockerCodeSandbox extends JavaCodeSandboxTemplate {
      * @param message
      * @return
      */
-    private static ResultCallback.Adapter<Frame> getFrameAdapter(String[] errorMessage, String[] message) {
-        final boolean[] isTimeout = {true};
+    private static ResultCallback.Adapter<Frame> getFrameAdapter(String[] errorMessage, String[] message, boolean[] isTimeout) {
         return new ResultCallback.Adapter<Frame>() {
             @Override
             public void onNext(Frame frame) {

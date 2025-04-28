@@ -11,8 +11,8 @@ import java.util.stream.Collectors;
  */
 public enum ExecuteStateEnum {
     SUCCESS("执行成功", 1),
-    ERROR("执行失败", 2),
-    FAILED("沙箱错误", 3);
+    FAILED("执行失败", 2),
+    ERROR("沙箱错误", 3);
 
     private final String text;
 
