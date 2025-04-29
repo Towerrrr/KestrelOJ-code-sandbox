@@ -2,6 +2,7 @@ package com.t0r.kestrelojcodesandbox;
 
 
 import cn.hutool.core.date.StopWatch;
+import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.io.resource.ResourceUtil;
 import cn.hutool.core.util.ArrayUtil;
 import com.github.dockerjava.api.DockerClient;
@@ -73,12 +74,12 @@ public class JavaDockerCodeSandbox extends JavaCodeSandboxTemplate {
         hostConfig.withMemory(1024 * 1024 * 1024L);
         hostConfig.withMemorySwap(0L);
         hostConfig.withCpuCount(1L);
-        // todo 安全管理配置
+        // todo 安全管理配置，直接用读取配置文件的方式，后续再看能否优化
         String userDir = System.getProperty("user.dir");
         String seccompConfigPath = "src/main/java/com/t0r/kestrelojcodesandbox/security/seccomp.json";
         String seccompConfigAbsolutePath = userDir + File.separator + seccompConfigPath;
-        // todo 先用默认地址
-//        hostConfig.withSecurityOpts(Collections.singletonList("seccomp=https://raw.githubusercontent.com/moby/moby/master/profiles/seccomp/default.json"));
+        String seccompConfig = FileUtil.readUtf8String(seccompConfigAbsolutePath);
+        hostConfig.withSecurityOpts(Collections.singletonList("seccomp=" + seccompConfig));
         hostConfig.setBinds(new Bind(userCodeParentPath, new Volume("/code")));
 
         CreateContainerResponse createContainerResponse = containerCmd
@@ -123,7 +124,6 @@ public class JavaDockerCodeSandbox extends JavaCodeSandboxTemplate {
             ResultCallback.Adapter<Frame> callback = getFrameAdapter(errorMessage, message, isTimeout);
 
             // 获取占用内存
-            // todo 太快了应该是，优化成都能获取到内存
             final long[] maxMemory = {0L};
             StatsCmd statsCmd = dockerClient.statsCmd(createContainerResponseId);
             ResultCallback<Statistics> resultCallback = getStatistics(maxMemory);
@@ -136,6 +136,7 @@ public class JavaDockerCodeSandbox extends JavaCodeSandboxTemplate {
                         .awaitCompletion(TIME_OUT, TimeUnit.MILLISECONDS);
                 stopWatch.stop();
                 time = stopWatch.getLastTaskTimeMillis();
+                TimeUnit.MILLISECONDS.sleep(400);
                 statsCmd.close();
             } catch (InterruptedException e) {
                 log.error("执行异常：{}", e.getMessage());

@@ -154,8 +154,9 @@ public abstract class JavaCodeSandboxTemplate implements CodeSandbox {
 
         JudgeInfo judgeInfo = new JudgeInfo();
 
+        judgeInfo.setMessage(JudgeInfoMessageEnum.ACCEPTED.getValue());
         // 取最大值，便于判断是否超时
-        long maxTime = 0;
+        long maxTime = 0, maxMemory = 0;
         for (ExecuteMessage executeMessage : executeMessageList) {
             String errorMessage = executeMessage.getErrorMessage();
             if (StrUtil.isNotBlank(errorMessage)) {
@@ -168,11 +169,17 @@ public abstract class JavaCodeSandboxTemplate implements CodeSandbox {
                 // 用户提交代码超时
                 executeCodeResponse.setStatus(ExecuteStateEnum.FAILED.getValue());
                 break;
+            } else if (executeMessage.getJudgeInfoMessageEnum() == JudgeInfoMessageEnum.MEMORY_LIMIT_EXCEEDED) {
+                judgeInfo.setMessage(JudgeInfoMessageEnum.MEMORY_LIMIT_EXCEEDED.getValue());
+                // 用户提交代码内存超限
+                executeCodeResponse.setStatus(ExecuteStateEnum.FAILED.getValue());
+                break;
             }
             outputList.add(executeMessage.getMessage());
-            Long time = executeMessage.getTime();
+            Long time = executeMessage.getTime(), memory = executeMessage.getMemory();
             if (time != null) {
                 maxTime = Math.max(maxTime, time);
+                maxMemory = Math.max(maxMemory, memory);
             }
         }
         // 正常运行完成
@@ -181,8 +188,7 @@ public abstract class JavaCodeSandboxTemplate implements CodeSandbox {
         }
         executeCodeResponse.setOutputList(outputList);
 
-        // todo 要借助第三方库，暂时不做
-//        judgeInfo.setMemory();
+        judgeInfo.setMemory(maxMemory);
         judgeInfo.setTime(maxTime);
         executeCodeResponse.setJudgeInfo(judgeInfo);
         return executeCodeResponse;
