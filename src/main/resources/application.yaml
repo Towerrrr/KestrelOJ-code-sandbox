@@ -1,3 +1,8 @@
 server:
   port: 8080
-
+docker:
+  pool:
+    # todo change this to a reasonable value
+    max-idle: 50
+    max-total: 2
+    min-idle: 2
