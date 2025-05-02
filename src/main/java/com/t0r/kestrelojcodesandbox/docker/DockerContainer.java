@@ -4,11 +4,10 @@ import cn.hutool.core.io.FileUtil;
 import com.github.dockerjava.api.DockerClient;
 import com.github.dockerjava.api.command.CreateContainerCmd;
 import com.github.dockerjava.api.command.CreateContainerResponse;
+import com.github.dockerjava.api.command.ExecCreateCmdResponse;
+import com.github.dockerjava.api.command.StartContainerCmd;
 import com.github.dockerjava.api.exception.ConflictException;
-import com.github.dockerjava.api.model.Bind;
-import com.github.dockerjava.api.model.HostConfig;
-import com.github.dockerjava.api.model.TaskStatusContainerStatus;
-import com.github.dockerjava.api.model.Volume;
+import com.github.dockerjava.api.model.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +17,7 @@ import java.io.File;
 import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 @Data
 @RequiredArgsConstructor
@@ -31,14 +31,16 @@ public class DockerContainer {
     private LocalDateTime lastUsedTime;
 
     // todo 解耦，分成DockerContainer和DockerContainers
+
     /**
-     * 创建容器
+     * 创建并启动容器
      *
      * @param dockerClient
      * @param image
      * @return 容器ID
      */
-    public static DockerContainer create(DockerClient dockerClient, String image) {
+    public static DockerContainer createAndStart(DockerClient dockerClient, String image) {
+        // 创建容器
         CreateContainerCmd containerCmd = dockerClient.createContainerCmd(image);
 
         HostConfig hostConfig = new HostConfig();
@@ -54,6 +56,8 @@ public class DockerContainer {
 
         String containersCodePath = "containersCode" + File.separator + UUID.randomUUID();
         String containersCodeAbsolutePath = userDir + File.separator + containersCodePath;
+        // 创建容器代码目录
+        FileUtil.mkdir(containersCodeAbsolutePath);
         hostConfig.setBinds(new Bind(containersCodeAbsolutePath, new Volume("/code")));
 
         CreateContainerResponse createContainerResponse = containerCmd
@@ -66,7 +70,47 @@ public class DockerContainer {
                 .withTty(true)
                 .exec();
         log.info("创建容器：{}", createContainerResponse);
-        return new DockerContainer(createContainerResponse.getId(), containersCodeAbsolutePath);
+        String containerId = createContainerResponse.getId();
+
+        // 启动容器
+        StartContainerCmd startContainerCmd = dockerClient.startContainerCmd(containerId);
+        startContainerCmd.exec();
+        log.info("启动容器：{}", containerId);
+
+        return new DockerContainer(containerId, containersCodeAbsolutePath);
+    }
+
+    /**
+     * 创建执行命令
+     *
+     * @param dockerClient
+     * @return 执行命令ID
+     */
+    public static String execCreate(DockerClient dockerClient, DockerContainer dockerContainer, String[] cmdArray) {
+        ExecCreateCmdResponse execCreateCmdResponse = dockerClient.execCreateCmd(dockerContainer.getContainerId())
+                .withCmd(cmdArray)
+                .withAttachStdin(true)
+                .withAttachStdout(true)
+                .withAttachStderr(true)
+                .exec();
+        log.info("创建执行命令：{}", execCreateCmdResponse);
+        return execCreateCmdResponse.getId();
+    }
+
+    /**
+     * 清理容器对应代码目录
+     *
+     * @param dockerContainer
+     */
+    public static void clear(DockerContainer dockerContainer) {
+        // 删除容器代码目录
+        if (FileUtil.del(dockerContainer.getContainersCodeAbsolutePath())) {
+            log.info("删除容器代码目录：{}", dockerContainer.getContainersCodeAbsolutePath());
+        } else {
+            log.error("删除容器代码目录失败：{}", dockerContainer.getContainersCodeAbsolutePath());
+        }
+        // 新建同名目录
+        FileUtil.mkdir(dockerContainer.getContainersCodeAbsolutePath());
     }
 
     public static void destroy(DockerClient dockerClient, DockerContainer dockerContainer) {

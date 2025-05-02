@@ -1,8 +1,6 @@
 package com.t0r.kestrelojcodesandbox.docker;
 
 import com.github.dockerjava.api.DockerClient;
-import com.github.dockerjava.api.exception.ConflictException;
-import com.github.dockerjava.api.exception.NotFoundException;
 import lombok.AllArgsConstructor;
 import org.apache.commons.pool2.PooledObject;
 import org.apache.commons.pool2.PooledObjectFactory;
@@ -25,7 +23,7 @@ public class DockerContainerFactory implements PooledObjectFactory<DockerContain
      */
     @Override
     public PooledObject<DockerContainer> makeObject() throws Exception {
-        return new DefaultPooledObject<>(DockerContainer.create(dockerClient, image));
+        return new DefaultPooledObject<>(DockerContainer.createAndStart(dockerClient, image));
     }
 
     /**
@@ -35,7 +33,8 @@ public class DockerContainerFactory implements PooledObjectFactory<DockerContain
      */
     @Override
     public void passivateObject(PooledObject<DockerContainer> pooledObject) throws Exception {
-
+        // 清理临时文件
+        DockerContainer.clear(pooledObject.getObject());
     }
 
     /**
@@ -45,6 +44,7 @@ public class DockerContainerFactory implements PooledObjectFactory<DockerContain
      */
     @Override
     public boolean validateObject(PooledObject<DockerContainer> pooledObject) {
+        // 检查容器是否存活，健康状态
         return true;
     }
 
