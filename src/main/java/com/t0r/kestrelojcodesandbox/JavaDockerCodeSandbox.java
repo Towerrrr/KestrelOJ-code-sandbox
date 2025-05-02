@@ -10,13 +10,16 @@ import com.github.dockerjava.api.async.ResultCallback;
 import com.github.dockerjava.api.command.*;
 import com.github.dockerjava.api.model.*;
 import com.github.dockerjava.core.DockerClientBuilder;
+import com.t0r.kestrelojcodesandbox.docker.DockerContainer;
 import com.t0r.kestrelojcodesandbox.model.ExecuteCodeRequest;
 import com.t0r.kestrelojcodesandbox.model.ExecuteCodeResponse;
 import com.t0r.kestrelojcodesandbox.model.ExecuteMessage;
+import com.t0r.kestrelojcodesandbox.utils.DockerPoolManager;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import com.t0r.kestrelojcodesandbox.enums.JudgeInfoMessageEnum;
 
+import javax.annotation.Resource;
 import java.io.Closeable;
 import java.io.File;
 import java.nio.charset.StandardCharsets;
@@ -32,7 +35,8 @@ public class JavaDockerCodeSandbox extends JavaCodeSandboxTemplate {
 
     private static final long TIME_OUT = 5000L;
 
-    private static final Boolean FIRST_INIT = false;
+    @Resource
+    private DockerPoolManager dockerPoolManager;
 
     public static void main(String[] args) {
         JavaDockerCodeSandbox javaNativeCodeSandbox = new JavaDockerCodeSandbox();
@@ -48,6 +52,7 @@ public class JavaDockerCodeSandbox extends JavaCodeSandboxTemplate {
 
     /**
      * 3. 创建容器，把文件复制到容器内
+     * todo 目前先专门制定容器代码映射的路径，后续看一下要不要直接把用户的代码直接存到映射的路径
      *
      * @param userCodeFile
      * @param inputList
@@ -55,101 +60,77 @@ public class JavaDockerCodeSandbox extends JavaCodeSandboxTemplate {
      */
     @Override
     public List<ExecuteMessage> runFile(File userCodeFile, List<String> inputList) {
-        String image = "openjdk:8-alpine";
-        String userCodeParentPath = userCodeFile.getParentFile().getAbsolutePath();
 
-        // 创建Docker客户端
-        DockerClient dockerClient = DockerClientBuilder.getInstance().build();
+        // 获取Docker客户端
+        DockerClient dockerClient = dockerPoolManager.getDockerClient();
 
-        // 拉取镜像
-        if (FIRST_INIT) {
-            pullImage(dockerClient, image);
-        }
+        DockerContainer container = null;
+        try {
+            container = dockerPoolManager.borrowObject();
 
-        // todo 容器池的实现
-        // 创建容器
-        CreateContainerCmd containerCmd = dockerClient.createContainerCmd(image);
+            // 复制文件到容器对应目录
+            String userCodeParentPath = userCodeFile.getParentFile().getAbsolutePath();
+            FileUtil.copy(userCodeParentPath, container.getContainersCodeAbsolutePath(), true);
 
-        HostConfig hostConfig = new HostConfig();
-        hostConfig.withMemory(1024 * 1024 * 1024L);
-        hostConfig.withMemorySwap(0L);
-        hostConfig.withCpuCount(1L);
-        // todo 安全管理配置，直接用读取配置文件的方式，后续再看能否优化
-        String userDir = System.getProperty("user.dir");
-        String seccompConfigPath = "src/main/java/com/t0r/kestrelojcodesandbox/security/seccomp.json";
-        String seccompConfigAbsolutePath = userDir + File.separator + seccompConfigPath;
-        String seccompConfig = FileUtil.readUtf8String(seccompConfigAbsolutePath);
-        hostConfig.withSecurityOpts(Collections.singletonList("seccomp=" + seccompConfig));
-        hostConfig.setBinds(new Bind(userCodeParentPath, new Volume("/code")));
+            // 执行命令并获取结果
+            // docker exec sharp_burnell java -cp /code  Main 1 4
+            List<ExecuteMessage> executeMessageList = new ArrayList<>();
+            for (String inputArgs : inputList) {
+                StopWatch stopWatch = new StopWatch();
+                ExecuteMessage executeMessage = new ExecuteMessage();
+                final String[] message = {null};
+                final String[] errorMessage = {null};
+                long time = 0L;
+                final boolean[] isTimeout = {true};
+                final long[] maxMemory = {0L};
 
-        CreateContainerResponse createContainerResponse = containerCmd
-                .withHostConfig(hostConfig)
-                .withNetworkDisabled(true)
-                .withReadonlyRootfs(true) // 根文件系统设为只读
-                .withAttachStdin(true)
-                .withAttachStdout(true)
-                .withAttachStderr(true)
-                .withTty(true)
-                .exec();
-        log.info("创建容器：{}", createContainerResponse);
-        String createContainerResponseId = createContainerResponse.getId();
+                String[] inputArgArray = inputArgs.split(" ");
+                String[] cmdArray = ArrayUtil.append(new String[]{"java", "-cp", "/code", "Main"}, inputArgArray);
+                ResultCallback.Adapter<Frame> callback = getFrameAdapter(errorMessage, message, isTimeout);
+                String execId = DockerContainer.execCreate(dockerClient, container, cmdArray);
 
-        // 启动容器
-        StartContainerCmd startContainerCmd = dockerClient.startContainerCmd(createContainerResponseId);
-        startContainerCmd.exec();
+                // 结果回调获取内存占用
+                StatsCmd statsCmd = dockerClient.statsCmd(container.getContainerId());
+                ResultCallback<Statistics> resultCallback = getStatistics(maxMemory);
+                statsCmd.exec(resultCallback);
 
-        // 执行命令并获取结果
-        // docker exec sharp_burnell java -cp /code  Main 1 4
-        List<ExecuteMessage> executeMessageList = new ArrayList<>();
-        for (String inputArgs : inputList) {
+                try {
+                    stopWatch.start();
+                    dockerClient.execStartCmd(execId)
+                            .exec(callback)
+                            .awaitCompletion(TIME_OUT, TimeUnit.MILLISECONDS);
+                    stopWatch.stop();
+                    time = stopWatch.getLastTaskTimeMillis();
+                    TimeUnit.MILLISECONDS.sleep(400);
+                    statsCmd.close();
+                } catch (InterruptedException e) {
+                    log.error("容器执行异常：{}", e.getMessage());
+                    throw new RuntimeException(e);
+                }
 
-            StopWatch stopWatch = new StopWatch();
-
-            String[] inputArgArray = inputArgs.split(" ");
-            String[] cmdArray = ArrayUtil.append(new String[]{"java", "-cp", "/code", "Main"}, inputArgArray);
-            ExecCreateCmdResponse execCreateCmdResponse = dockerClient.execCreateCmd(createContainerResponseId)
-                    .withCmd(cmdArray)
-                    .withAttachStdin(true)
-                    .withAttachStdout(true)
-                    .withAttachStderr(true)
-                    .exec();
-            log.info("创建执行命令：{}", execCreateCmdResponse);
-
-            ExecuteMessage executeMessage = new ExecuteMessage();
-            final String[] message = {null};
-            final String[] errorMessage = {null};
-            String execId = execCreateCmdResponse.getId();
-            long time = 0L;
-            final boolean[] isTimeout = {true};
-            ResultCallback.Adapter<Frame> callback = getFrameAdapter(errorMessage, message, isTimeout);
-
-            // 获取占用内存
-            final long[] maxMemory = {0L};
-            StatsCmd statsCmd = dockerClient.statsCmd(createContainerResponseId);
-            ResultCallback<Statistics> resultCallback = getStatistics(maxMemory);
-            statsCmd.exec(resultCallback);
-
-            try {
-                stopWatch.start();
-                dockerClient.execStartCmd(execId)
-                        .exec(callback)
-                        .awaitCompletion(TIME_OUT, TimeUnit.MILLISECONDS);
-                stopWatch.stop();
-                time = stopWatch.getLastTaskTimeMillis();
-                TimeUnit.MILLISECONDS.sleep(400);
-                statsCmd.close();
-            } catch (InterruptedException e) {
-                log.error("执行异常：{}", e.getMessage());
-                throw new RuntimeException(e);
+                executeMessage.setJudgeInfoMessageEnum(isTimeout[0] ? JudgeInfoMessageEnum.TIME_EXCEEDED : JudgeInfoMessageEnum.ACCEPTED);
+                executeMessage.setMessage(message[0]);
+                executeMessage.setErrorMessage(errorMessage[0]);
+                executeMessage.setTime(time);
+                executeMessage.setMemory(maxMemory[0]);
+                executeMessageList.add(executeMessage);
             }
-            executeMessage.setJudgeInfoMessageEnum(isTimeout[0]? JudgeInfoMessageEnum.TIME_EXCEEDED : JudgeInfoMessageEnum.ACCEPTED);
-            executeMessage.setMessage(message[0]);
-            executeMessage.setErrorMessage(errorMessage[0]);
-            executeMessage.setTime(time);
-            executeMessage.setMemory(maxMemory[0]);
-            executeMessageList.add(executeMessage);
+
+            return executeMessageList;
+        } catch (Exception e) {
+            try {
+                dockerPoolManager.invalidateObject(container); // 销毁异常容器
+            } catch (Exception ex) {
+                log.error("销毁异常容器异常：{}", ex.getMessage());
+                throw new RuntimeException(ex);
+            }
+            log.error("容器获取异常：{}\n已销毁容器：{}", e.getMessage(), container);
+            throw new RuntimeException(e);
+        } finally {
+            if (container != null) {
+                dockerPoolManager.returnObject(container); // 归还容器
+            }
         }
-        return executeMessageList;
     }
 
     /**
@@ -226,32 +207,5 @@ public class JavaDockerCodeSandbox extends JavaCodeSandboxTemplate {
             }
 
         };
-    }
-
-    /**
-     * 拉取镜像
-     *
-     * @param dockerClient
-     * @param image
-     */
-    private static void pullImage(DockerClient dockerClient, String image) {
-        PullImageCmd pullImageCmd = dockerClient.pullImageCmd(image);
-        PullImageResultCallback pullImageResultCallback = new PullImageResultCallback() {
-            @Override
-            public void onNext(PullResponseItem item) {
-                log.info("下载镜像：{}", item.getStatus());
-                super.onNext(item);
-            }
-        };
-        try {
-            pullImageCmd
-                    // todo 试试不用回调
-                    .exec(pullImageResultCallback)
-                    .awaitCompletion();
-        } catch (InterruptedException e) {
-            log.error("拉取镜像异常", e);
-            throw new RuntimeException(e);
-        }
-        log.info("镜像下载完成");
     }
 }
