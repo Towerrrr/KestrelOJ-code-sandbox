@@ -25,6 +25,10 @@
     * 消耗内存
     * 消耗时间
 
+## 注意
+
+1. 确保运行项目的用户对项目路径拥有读写权限。
+
 ## 其他
 
 红隼锐瞳在线判题系统-后端仓库地址：[https://github.com/Towerrrr/KestrelOJ-backend-microservice](https://github.com/Towerrrr/KestrelOJ-backend-microservice)
