@@ -8,7 +8,7 @@ import com.t0r.kestrelojcodesandbox.docker.DockerContainerFactory;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.pool2.impl.GenericObjectPool;
-import org.springframework.boot.actuate.endpoint.annotation.ReadOperation;
+import org.springframework.jmx.export.annotation.ManagedResource;
 import org.springframework.stereotype.Component;
 
 import javax.annotation.PostConstruct;
@@ -53,19 +53,5 @@ public class DockerPoolManager {
         pool.invalidateObject(dockerContainer);
     }
 
-    /**
-     * 暴露池监控指标（活跃数、空闲数）
-     * @return
-     */
-    @ReadOperation
-    public Map<String, Integer> metrics() {
-        Map<String, Integer> metricsMap = new HashMap<>();
-        metricsMap.put("active", pool.getNumActive());
-        metricsMap.put("idle", pool.getNumIdle());
-        return metricsMap;
-    }
-
-
-    // todo 在utils中增加 DockerPoolMetrics.java 通过JMX暴露池监控指标
     // todo 当 pool.getNumWaiters() > 5 使触发扩容
 }
