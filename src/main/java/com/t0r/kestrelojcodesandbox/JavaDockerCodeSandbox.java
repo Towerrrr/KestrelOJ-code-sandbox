@@ -70,7 +70,22 @@ public class JavaDockerCodeSandbox extends JavaCodeSandboxTemplate {
 
             // 复制文件到容器对应目录
             String userCodeParentPath = userCodeFile.getParentFile().getAbsolutePath();
-            FileUtil.copy(userCodeParentPath, container.getContainersCodeAbsolutePath(), true);
+            File sourceDir = new File(userCodeParentPath);
+            File destDir = new File(container.getContainersCodeAbsolutePath());
+
+            File[] files = sourceDir.listFiles();
+            if (files != null) {
+                for (File file : files) {
+                    FileUtil.copy(file, new File(destDir, file.getName()), true);
+                }
+            }
+            log.info("复制文件到容器目录：{} -> {}", userCodeParentPath, container.getContainersCodeAbsolutePath());
+
+//            // 使用hutool打印目标文件夹中的文件列表
+//            List<File> fileList = Arrays.asList(FileUtil.ls(container.getContainersCodeAbsolutePath()));
+//            for (File file : fileList) {
+//                log.info("文件夹中的文件: {}", file.getAbsolutePath());
+//            }
 
             // 执行命令并获取结果
             // docker exec sharp_burnell java -cp /code  Main 1 4
