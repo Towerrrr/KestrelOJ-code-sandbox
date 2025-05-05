@@ -33,8 +33,8 @@ public class DockerContainerFactory implements PooledObjectFactory<DockerContain
      */
     @Override
     public void passivateObject(PooledObject<DockerContainer> pooledObject) throws Exception {
-        // 清理临时文件
-        DockerContainer.clear(pooledObject.getObject());
+        // todo 在这个方法清理临时文件，执行代码前就会被清理
+//        DockerContainer.clear(pooledObject.getObject());
     }
 
     /**
